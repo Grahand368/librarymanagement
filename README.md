@@ -17,12 +17,13 @@ A premium, modern Library Management System built with PHP and MySQL, featuring 
 ## 🚀 Features
 
 ### Admin Console
-- **Dashboard** — Animated stat tiles (total users, books, categories, issued books) plus system status panel and quick-action shortcuts
-- **Book Management** — Add, edit, delete, and browse the full book catalog
+- **Dashboard** — Animated stat tiles (total users, books, categories, authors, issued books) plus system status panel and quick-action shortcuts
+- **Book Management** — Add, edit, delete, and browse the full book catalog (with live client-side search)
 - **Category Management** — Add, edit, delete, and list book categories
-- **Author Management** — Issue-book form pulls authors from the `authors` table
-- **Book Issuing** — Issue books to registered members; auto-confirm via toast
-- **Member Management** — Browse all registered users with a live search filter
+- **Author Management** — Full CRUD: add, edit, delete, and list authors. Issue-book form pulls authors from the `authors` table
+- **Book Issuing** — Issue books to registered members, view active loans, and **mark books as returned** (auto-increments `book_qty`)
+- **Book Inventory** — Track per-title copy quantity (`book_qty`) and capture return dates for every loan
+- **Member Management** — Browse all registered users with a live client-side search filter
 - **Issued Books** — View all books currently on loan with member info
 - **Profile Management** — View, edit, and change password with validation
 - **One-time setup script** — `create_admin.php` seeds the database and creates the first admin
@@ -41,6 +42,7 @@ A premium, modern Library Management System built with PHP and MySQL, featuring 
 - Empty-state placeholders ("∅") on tables
 - Auto-highlighted active link in sidebar (gold pill)
 - Password show/hide toggle
+- Client-side table search filters on member list and issued-book tables
 
 ---
 
@@ -49,14 +51,14 @@ A premium, modern Library Management System built with PHP and MySQL, featuring 
 | Layer | Technology |
 |-------|------------|
 | **Backend** | PHP 7.0+ (uses MySQLi extension) |
-| **Database** | MySQL 5.6+ |
+| **Database** | MySQL 5.6+ / MariaDB |
 | **Frontend** | Vanilla HTML5, CSS3, JavaScript (ES5+) |
 | **Typography** | Playfair Display, Inter, JetBrains Mono (Google Fonts) |
 | **Icons** | Inline SVG (Feather-style) |
 | **Server** | Apache / Nginx (tested on Apache 2.4.58) |
 | **PHP Tested** | 8.2.12 |
 
-> **No frameworks.** No Bootstrap, no jQuery, no build pipeline. The entire design system lives in two files: `aurora.css` (~600 lines) and `aurora.js`.
+> **No frameworks.** No Bootstrap, no jQuery, no build pipeline. The entire design system lives in two files: `static/css/aurora.css` (~610 lines) and `static/js/aurora.js` (~150 lines).
 
 ---
 
@@ -68,12 +70,12 @@ Database name: **`lms`**
 |-------|---------|
 | `admins` | `id`, `name`, `email` (UNIQUE), `password`, `mobile` |
 | `users` | `id`, `name`, `email` (UNIQUE), `password`, `mobile`, `address` |
-| `books` | `book_id`, `book_name`, `author_id`, `cat_id`, `book_no`, `book_price` |
+| `books` | `book_id`, `book_name`, `author_id`, `cat_id`, `book_no`, `book_price`, `book_qty` (default 5) |
 | `authors` | `author_id`, `author_name` |
 | `category` | `cat_id`, `cat_name` |
-| `issued_books` | `id`, `book_no`, `book_name`, `book_author`, `student_id`, `status`, `issue_date` |
+| `issued_books` | `id`, `book_no`, `book_name`, `book_author`, `student_id`, `status` (1=active, 0=returned), `issue_date`, `book_return_date` |
 
-> The `lms` database and all six tables are created automatically when you run `create_admin.php`.
+> The `lms` database and all six tables are created automatically when you run `create_admin.php`. The `book_qty` and `book_return_date` columns are added by `migrate_inventory.php` (run this once after `create_admin.php` on existing installs).
 
 ---
 
@@ -81,16 +83,25 @@ Database name: **`lms`**
 
 ```
 lms/
-├── aurora.css                    # Design system (colors, typography, components, animations)
-├── aurora.js                     # Shared interactions (toasts, counters, table filters, password toggles)
 ├── create_admin.php              # One-time setup — seeds DB + creates first admin
+├── migrate_inventory.php         # Migration — adds book_qty + book_return_date columns
+├── fix_data.php                  # Data-repair utility (cleans emails, fixes duplicates)
+├── seed_data.php                 # Seeds sample authors, categories, books, users
+├── seed_random.php               # Bulk-seeds randomized users (configurable volume)
 ├── logout.php                    # Session destroy + redirect
+│
+├── static/
+│   ├── css/
+│   │   └── aurora.css            # Design system (colors, typography, components, animations)
+│   └── js/
+│       └── aurora.js             # Shared interactions (toasts, counters, table filters, password toggles)
 │
 ├── login_module/
 │   ├── index.php                 # Member sign-in
 │   ├── admin_login.php           # Administrator sign-in
 │   ├── signup.php                # Member registration form
-│   └── register.php              # Registration handler + success page
+│   ├── register.php              # Registration handler + success page
+│   └── logout.php                # Session destroy
 │
 ├── Admin_Dashboard_Module/
 │   ├── sidebar.php               # Reusable admin navigation include
@@ -101,7 +112,7 @@ lms/
 │   ├── update.php                # Profile update handler
 │   ├── change_password.php       # Password change form
 │   ├── update_password.php       # Password update handler + confirmation
-│   ├── regusers.php              # Registered members table
+│   ├── regusers.php              # Registered members table (with search)
 │   ├── view_issued_book.php      # All issued books table
 │   ├── registered_user.php       # User count helper
 │   └── registered_book.php       # Book count helper
@@ -114,11 +125,11 @@ lms/
 │   ├── update.php                # Profile update handler
 │   ├── change_password.php       # Password change form
 │   ├── update_password.php       # Password update handler + confirmation
-│   └── view_issued_book.php      # Member's issued books table
+│   └── view_issued_book.php      # Member's issued books table (with search)
 │
 ├── Add_books_lms/
 │   ├── add_book.php              # Add new book form
-│   ├── manage_book.php           # Book list with edit/delete actions
+│   ├── manage_book.php           # Book list with edit/delete actions (with search)
 │   ├── edit_book.php             # Edit book form
 │   ├── delete_book.php           # Delete handler + toast redirect
 │   ├── regbooks.php              # Full book catalog (read-only)
@@ -131,8 +142,16 @@ lms/
 │   ├── delete_cat.php            # Delete handler + toast redirect
 │   └── Regcat.php                # Categories list (read-only)
 │
+├── Manage_Authors/
+│   ├── add_author.php            # Add new author form
+│   ├── manage_author.php         # Author list with edit/delete
+│   ├── edit_author.php           # Edit author form
+│   ├── delete_author.php         # Delete handler + toast redirect
+│   └── Regauthor.php             # Authors list (read-only)
+│
 └── Issue_book_Module/
-    └── issue_book.php            # Issue book to member form
+    ├── issue_book.php            # Issue-book form + active-loans table with Return action
+    └── return_book.php           # Marks loan returned, sets book_return_date, +1 to book_qty
 ```
 
 ---
@@ -149,11 +168,12 @@ lms/
 1. Place the `lms/` folder inside your web server's document root (e.g. `htdocs/`, `www/`, or `public_html/`)
 2. Start Apache and MySQL
 3. Open **`http://localhost/lms/create_admin.php`** in your browser
-4. The script will:
-   - Create the `lms` database (if missing)
-   - Create all six required tables
-   - Insert a default administrator account
-5. **Delete `create_admin.php`** from the server for security
+   - Creates the `lms` database (if missing)
+   - Creates all six required tables
+   - Inserts a default administrator account
+4. Open **`http://localhost/lms/migrate_inventory.php`** in your browser to add the `book_qty` and `book_return_date` columns
+5. (Optional) Open **`http://localhost/lms/seed_data.php`** to populate sample data
+6. **Delete `create_admin.php` and `migrate_inventory.php` from the server for security**
 
 ### 3. Default Database Connection
 ```
@@ -191,13 +211,19 @@ After first login, change the password from **Change Password** in the sidebar.
 - Book Catalog: `http://localhost/lms/Add_books_lms/regbooks.php`
 - Issue Book: `http://localhost/lms/Issue_book_Module/issue_book.php`
 
+### Maintenance / Setup
+- Create first admin: `http://localhost/lms/create_admin.php` *(delete after use)*
+- Migrate inventory columns: `http://localhost/lms/migrate_inventory.php` *(delete after use)*
+- Seed sample data: `http://localhost/lms/seed_data.php`
+- Repair data: `http://localhost/lms/fix_data.php`
+
 > **Tip:** Once logged in, always use the sidebar links rather than typing URLs.
 
 ---
 
 ## 🎨 Design System — Aurora
 
-The visual language is defined by `aurora.css`. Key design tokens:
+The visual language is defined by `static/css/aurora.css`. Key design tokens:
 
 | Token | Value | Use |
 |-------|-------|-----|
@@ -239,13 +265,12 @@ Then sign in at `login_module/admin_login.php`.
 
 The following features are referenced in the UI but not yet implemented:
 
-- **Forgot Password** flow (links exist on login pages)
-- **Author management** CRUD (only `add_author.php` is wired into the issue-book dropdown — dedicated add/manage pages are pending)
-- **Book return** workflow (no way to mark an issued book as returned)
-- **Due date tracking & overdue notifications** (issue_date is stored but no return-by-date logic)
-- **Full-text book search** for members (currently members can only see books already issued to them)
-- **Email notifications** (registration confirmation, due-date reminders)
+- **Forgot Password** flow (link exists on login pages, no handler)
+- **Due date tracking & overdue notifications** (issue_date and book_return_date are stored, but there is no due-date/return-by logic and no automated reminders)
+- **Email notifications** (registration confirmation, return reminders)
 - **Password hashing** (currently uses plain text — see Security Notes)
+- **Search by author/category** for members (members can only see books already issued to them; no public catalog search)
+- **Server-side search/pagination** (current search is client-side only; large datasets will not scale)
 
 ---
 
@@ -258,6 +283,8 @@ This is an **academic / learning project**. The following should be addressed be
 - ⚠️ **No CSRF protection** on form submissions
 - ⚠️ **No session regeneration** on login
 - ⚠️ **No rate limiting** on login attempts
+- ⚠️ **Return-book action is a GET request** — should be POST with CSRF token
+- ⚠️ **Two `update.php` handlers are missing `WHERE` clauses** (`Admin_Dashboard_Module/update.php` and `dashboardmainpage/update.php`) — currently update every row in their tables
 
 ---
 
@@ -268,5 +295,3 @@ This project is intended for educational purposes. Feel free to fork, learn from
 ---
 
 **Aurora Library** — *Where knowledge meets elegance.*
-#   a u r o r a - l i b r a r y  
- 
